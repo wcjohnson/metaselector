@@ -7,3 +7,4 @@ relm.bootstrap_with_core_events(event)
 
 strace.set_handler(strace.standard_log_handler)
 
+require("control.ui.combinator")

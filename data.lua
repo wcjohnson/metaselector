@@ -24,6 +24,7 @@ combinator.sprites.south.layers[1].filename = "__metaselector__/graphics/metasel
 combinator.icon = "__metaselector__/graphics/metaselector-icon.png"
 
 data:extend({
+	combinator,
 	{ type = "custom-event", name = "metaselector-on_tags_changed" },
 	{ type = "custom-event", name = "metaselector-on_initialized" },
 	{ type = "custom-event", name = "metaselector-on_status" },
@@ -65,8 +66,9 @@ local recipe = {
 	enabled = false,
 	energy_required = 30,
 	ingredients = {
-		{ type = "item", name = "electronic-circuit", amount = 10 },
-		{ type = "item", name = "copper-cable", amount = 5 },
+		{ type = "item", name = "arithmetic-combinator", amount = 1 },
+		{ type = "item", name = "decider-combinator", amount = 1 },
+		{ type = "item", name = "selector-combinator", amount = 1 },
 	},
 	results = {
 		{ type = "item", name = "metaselector-combinator", amount = 1 },
