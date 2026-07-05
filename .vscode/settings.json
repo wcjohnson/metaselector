@@ -4,5 +4,11 @@
       "name": "steam",
       "factorioPath": "d:\\SteamLibrary\\steamapps\\common\\Factorio\\bin\\x64\\factorio.exe"
     }
-  ]
+  ],
+    "[lua]": {
+    "editor.defaultFormatter": "JohnnyMorganz.stylua",
+    "editor.formatOnSave": true
+  },
+  "stylua.targetReleaseVersion": "latest",
+  "factorio.workspace.manageLibraryDataLinks": false
 }
