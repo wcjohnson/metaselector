@@ -6,8 +6,10 @@ local lib = {}
 ---@class (exact) Metaselector.ModeRegistration
 ---@field name string
 ---@field caption LocalisedString
+---@field script_inputs? true
 ---@field settings_element string
----@field compile function
+---@field compile? function
+---@field script_update? fun(Metaselector.Combinator)
 
 ---@type table<string, Metaselector.ModeRegistration>
 local modes = {}
@@ -27,12 +29,12 @@ lib.register_mode({
 	name = "none",
 	caption = "None",
 	settings_element = "Settings.None",
-	compile = function()
-	end,
+	compile = function() end,
 })
 
-relm.define("Settings.None", function(props)
-	return ultros.Label("No mode selected.")
-end)
+relm.define(
+	"Settings.None",
+	function(props) return ultros.Label("No mode selected.") end
+)
 
 return lib

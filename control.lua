@@ -7,8 +7,10 @@ relm.bootstrap_with_core_events(event)
 
 strace.set_handler(strace.standard_log_handler)
 
+require("control.storage")
+require("control.combinator")
 require("control.mode")
 
-require("control.modes.item-to-ingredients")
+require("control.modes.product-to-ingredients")
 
 require("control.ui.combinator")

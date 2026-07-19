@@ -15,13 +15,14 @@ local Pr = relm.Primitive
 
 local ModePicker = relm.define("ModePicker", function(props)
 	local thing = things_client.represent(props.thing_id)
-	local desired_mode = relm.use_result(function()
-		return thing:get_tag("mode") or "none"
-	end)
+	local desired_mode = relm.use_result(
+		function() return thing:get_tag("mode") or "none" end
+	)
 
-	local options = tlib.map(sorted_modes, function(mode)
-		return { caption = mode.caption, key = mode.name }
-	end)
+	local options = tlib.map(
+		sorted_modes,
+		function(mode) return { caption = mode.caption, key = mode.name } end
+	)
 
 	return ultros.Dropdown({
 		options = options,
@@ -37,9 +38,9 @@ end)
 
 local ModeSettings = relm.define("ModeSettings", function(props)
 	local thing = things_client.represent(props.thing_id)
-	local mode_name = relm.use_result(function()
-		return thing:get_tag("mode") or "none"
-	end)
+	local mode_name = relm.use_result(
+		function() return thing:get_tag("mode") or "none" end
+	)
 	local mode = modes[mode_name]
 	if not mode then return ultros.Label("Invalid mode: " .. mode_name) end
 	return relm.element(mode.settings_element, { thing_id = props.thing_id })
@@ -57,37 +58,45 @@ relm.define("MetaselectorUi", function(props)
 	ultros.use_player_opened(player_index)
 
 	-- Repaint
-	relm_util.use_event_handler("metaselector-on_tags_changed", function(me, _, ev)
-		if ev.thing.id ~= thing_id then return end
-		relm.paint(me)
-	end)
+	relm_util.use_event_handler(
+		"metaselector-on_tags_changed",
+		function(me, _, ev)
+			if ev.thing.id ~= thing_id then return end
+			relm.paint(me)
+		end
+	)
 
-	return ultros.WindowFrame({caption = "Metaselector", on_close = close_me}, {Pr({
-			type = "frame",
-			style = "inside_shallow_frame",
-			direction = "vertical",
-			vertically_stretchable = true,
-			width = 400,
-			minimal_height = 600,
-		}, {
+	return ultros.WindowFrame(
+		{ caption = "Metaselector", on_close = close_me },
+		{
 			Pr({
-				type = "scroll-pane",
+				type = "frame",
+				style = "inside_shallow_frame",
 				direction = "vertical",
 				vertically_stretchable = true,
-				vertical_scroll_policy = "always",
-				horizontal_scroll_policy = "never",
-				extra_top_padding_when_activated = 0,
-				extra_left_padding_when_activated = 0,
-				extra_right_padding_when_activated = 0,
-				extra_bottom_padding_when_activated = 0,
+				width = 400,
+				minimal_height = 600,
 			}, {
-				ultros.WellSection(
-					{ caption = "Mode" },
-					{ ModePicker({ thing_id = thing_id }) }
-				),
-				ModeSettings({ thing_id = thing_id }),
+				Pr({
+					type = "scroll-pane",
+					direction = "vertical",
+					vertically_stretchable = true,
+					vertical_scroll_policy = "always",
+					horizontal_scroll_policy = "never",
+					extra_top_padding_when_activated = 0,
+					extra_left_padding_when_activated = 0,
+					extra_right_padding_when_activated = 0,
+					extra_bottom_padding_when_activated = 0,
+				}, {
+					ultros.WellSection(
+						{ caption = "Mode" },
+						{ ModePicker({ thing_id = thing_id }) }
+					),
+					ModeSettings({ thing_id = thing_id }),
+				}),
 			}),
-		})})
+		}
+	)
 end)
 
 ---@param player LuaPlayer
@@ -116,6 +125,7 @@ event.bind(defines.events.on_gui_opened, function(ev)
 
 	local _, thing_id = remote.call("things", "get_thing_id", selected)
 	if not thing_id then return end
+	---@cast thing_id things.Id
 
 	open_combinator_ui(player, thing_id)
 end)
