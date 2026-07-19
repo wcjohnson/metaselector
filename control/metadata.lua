@@ -25,6 +25,7 @@ end
 ---@field public variant_count integer
 ---@field public variants Metaselector.RecipeVariant[]
 ---@field public variants_by_ingredient_key table<SignalKey, integer[]>
+---@field public variants_by_pivot_key table<SignalKey, integer[]>
 
 ---@class Metaselector.RecipeVariant
 ---@field public recipe LuaRecipePrototype
@@ -33,6 +34,7 @@ end
 ---@field public required_count integer
 ---@field public required_keys SignalKey[]
 ---@field public required_amounts integer[]
+---@field public pivot_key SignalKey
 
 ---@type string[]?
 local _quality_names
@@ -75,6 +77,8 @@ function lib.get_machine_metadata(machine_name, surface)
 	local variants = {}
 	---@type table<SignalKey, integer[]>
 	local variants_by_ingredient_key = {}
+	---@type table<SignalKey, integer[]>
+	local variants_by_pivot_key = {}
 	---@type Metaselector.MachineMetadata
 	local metadata = {
 		recipes = recipes,
@@ -82,6 +86,7 @@ function lib.get_machine_metadata(machine_name, surface)
 		variant_count = 0,
 		variants = variants,
 		variants_by_ingredient_key = variants_by_ingredient_key,
+		variants_by_pivot_key = variants_by_pivot_key,
 	}
 
 	local mproto = prototypes.entity[machine_name]
@@ -133,6 +138,7 @@ function lib.get_machine_metadata(machine_name, surface)
 					required_count = #required_keys,
 					required_keys = required_keys,
 					required_amounts = required_amounts,
+					pivot_key = required_keys[1],
 				}
 				for i = 1, #required_keys do
 					local key = required_keys[i]
@@ -146,6 +152,28 @@ function lib.get_machine_metadata(machine_name, surface)
 			end
 		end
 		::continue::
+	end
+
+	for variant_id = 1, #variants do
+		local variant = variants[variant_id]
+		local required_keys = variant.required_keys
+		local pivot_key = required_keys[1]
+		local pivot_len = #(variants_by_ingredient_key[pivot_key] or EMPTY)
+		for i = 2, variant.required_count do
+			local key = required_keys[i]
+			local key_len = #(variants_by_ingredient_key[key] or EMPTY)
+			if key_len < pivot_len then
+				pivot_key = key
+				pivot_len = key_len
+			end
+		end
+		variant.pivot_key = pivot_key
+		local pivot_variants = variants_by_pivot_key[pivot_key]
+		if pivot_variants then
+			pivot_variants[#pivot_variants + 1] = variant_id
+		else
+			variants_by_pivot_key[pivot_key] = { variant_id }
+		end
 	end
 
 	metadata.variant_count = #variants

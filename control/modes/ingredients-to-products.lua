@@ -33,34 +33,28 @@ mode_lib.register_mode({
 				combinator:direct_write_outputs(EMPTY)
 				return
 			end
-			local variants_by_ingredient_key = metadata.variants_by_ingredient_key
+			local variants = metadata.variants
+			local variants_by_pivot_key = metadata.variants_by_pivot_key
 
 			---@type SignalCounts
 			local input_counts = signals_to_counts(inputs)
 
 			local prof_1 = helpers.create_profiler()
-			---@type table<integer, integer>
-			local candidate_hits = {}
-			local candidate_count = 0
+			---@type integer[]
+			local candidates = {}
 			for key in pairs(input_counts) do
-				local variant_ids = variants_by_ingredient_key[key]
+				local variant_ids = variants_by_pivot_key[key]
 				if variant_ids then
 					for i = 1, #variant_ids do
-						local variant_id = variant_ids[i]
-						local hits = candidate_hits[variant_id]
-						if hits == nil then
-							candidate_hits[variant_id] = 1
-							candidate_count = candidate_count + 1
-						else
-							candidate_hits[variant_id] = hits + 1
-						end
+						candidates[#candidates + 1] = variant_ids[i]
 					end
 				end
 			end
+			local candidate_count = #candidates
 			prof_1.stop()
 			log({
 				"",
-				"ingredients-to-products: candidate_hits took ",
+				"ingredients-to-products: pivot candidate collection took ",
 				prof_1,
 				" for hits ",
 				candidate_count,
@@ -71,28 +65,26 @@ mode_lib.register_mode({
 			local seen_outputs = {}
 			---@type DeciderCombinatorOutput[]
 			local outputs = {}
-			for variant_id, hit_count in pairs(candidate_hits) do
-				local variant = metadata.variants[variant_id] --[[@as Metaselector.RecipeVariant]]
-				if hit_count == variant.required_count then
-					local can_make = true
-					for i = 1, variant.required_count do
-						local key = variant.required_keys[i]
-						if (input_counts[key] or 0) < variant.required_amounts[i] then
-							can_make = false
-							break
-						end
+			for i = 1, candidate_count do
+				local variant = variants[candidates[i]] --[[@as Metaselector.RecipeVariant]]
+				local can_make = true
+				for j = 1, variant.required_count do
+					local key = variant.required_keys[j]
+					if (input_counts[key] or 0) < variant.required_amounts[j] then
+						can_make = false
+						break
 					end
+				end
 
-					if can_make then
-						local product_key = signal_to_key(variant.product)
-						if not seen_outputs[product_key] then
-							seen_outputs[product_key] = true
-							outputs[#outputs + 1] = {
-								signal = variant.product,
-								copy_count_from_input = false,
-								constant = 1,
-							}
-						end
+				if can_make then
+					local product_key = signal_to_key(variant.product)
+					if not seen_outputs[product_key] then
+						seen_outputs[product_key] = true
+						outputs[#outputs + 1] = {
+							signal = variant.product,
+							copy_count_from_input = false,
+							constant = 1,
+						}
 					end
 				end
 			end
