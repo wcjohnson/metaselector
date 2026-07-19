@@ -12,5 +12,6 @@ require("control.combinator")
 require("control.mode")
 
 require("control.modes.product-to-ingredients")
+require("control.modes.ingredients-to-products")
 
 require("control.ui.combinator")

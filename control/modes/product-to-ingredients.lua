@@ -13,7 +13,7 @@ local EMPTY = tlib.EMPTY
 
 mode_lib.register_mode({
 	name = "product-to-ingredients",
-	caption = "Product to Ingredients",
+	caption = { "metaselector-product-to-ingredients.caption" },
 	settings_element = "Settings.ProductToIngredients",
 	script_inputs = true,
 	script_update =
@@ -69,9 +69,9 @@ relm.define("Settings.ProductToIngredients", function(props)
 
 	return {
 		ultros.WellSection({
-			caption = "Settings",
+			caption = { "metaselector-general.settings" },
 		}, {
-			ultros.Labeled({ caption = "Machine" }, {
+			ultros.Labeled({ caption = { "metaselector-general.machine" } }, {
 				ultros.SignalPicker({
 					value = machine,
 					elem_filters = { { filter = "crafting-machine" } },
@@ -83,10 +83,10 @@ relm.define("Settings.ProductToIngredients", function(props)
 				}),
 			}),
 		}),
-		ultros.WellSection({ caption = "Help" }, {
-			ultros.RtMultilineLabel(
-				"[font=default-bold]This mode is scripted.[/font]\n\nFor the given machine, the first input item signal representing something the machine can craft will cause an output signal equal to the ingredients of a single craft of that item.\n\nThe value of input signal is ignored, and the output signals are always the ingredients for a single craft of the input item.\n\nIf the machine is not set, or if the input item is not craftable by that machine, no output signals will be produced."
-			),
+		ultros.WellSection({ caption = { "metaselector-general.help" } }, {
+			ultros.RtMultilineLabel({
+				"metaselector-product-to-ingredients.help-richtext",
+			}),
 		}),
 	}
 end)
