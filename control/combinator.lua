@@ -214,6 +214,7 @@ events.bind(
 		if ev.status == "real" then
 			local comb = Combinator:new(ev.id, ev.entity --[[@as ValidEntity]])
 			comb:check_detector()
+			comb:set_inputs_dirty()
 		end
 	end
 )
@@ -232,6 +233,7 @@ events.bind(
 					Combinator:new(ev.thing.id, ev.thing.entity --[[@as ValidEntity]])
 			end
 			comb:check_detector()
+			comb:set_inputs_dirty()
 		elseif ev.old_status == "real" then
 			local comb = storage.combinators[ev.thing.id]
 			if comb then comb:destroy() end

@@ -1,5 +1,6 @@
 local tlib = require("lib.core.table")
 local strace = require("lib.core.strace")
+local events = require("lib.core.event")
 
 local signal_numbers = require("__signal-numbers__.signal-numbers") --[[@as SignalNumbers.Lib]]
 
@@ -7,6 +8,8 @@ local ipairs = ipairs
 local pairs = pairs
 local EMPTY = tlib.EMPTY
 local exploded_signal_to_number = signal_numbers.exploded_signal_to_number
+local number_to_signal = signal_numbers.number_to_signal
+local JUST_NORMAL = { "normal" }
 
 local lib = {}
 
@@ -31,6 +34,7 @@ end
 
 ---@class Metaselector.RecipeVariant
 ---@field public recipe LuaRecipePrototype
+---@field public recipe_number SignalNumber
 ---@field public quality string
 ---@field public product SignalID
 ---@field public product_number SignalNumber
@@ -39,6 +43,7 @@ end
 ---@field public required_amounts integer[]
 ---@field public pivot_key SignalNumber
 
+-- XXX: MP SAFETY: Pure function of prototypes
 ---@type string[]?
 local _quality_names
 
@@ -56,23 +61,16 @@ local function get_quality_names()
 	return quality_names
 end
 
----@type table<string, table<int, Metaselector.MachineMetadata>>
+-- XXX: MP SAFETY: Pure function of prototypes
+---@type table<string, Metaselector.MachineMetadata>
 local _machine_metadata = {}
 
 ---@param machine_name string?
----@param surface LuaSurface?
 ---@return Metaselector.MachineMetadata?
-function lib.get_machine_metadata(machine_name, surface)
-	if not machine_name or not surface then return end
-	local surface_index = surface.index
+function lib.get_machine_metadata(machine_name)
+	if not machine_name then return end
 	local by_name = _machine_metadata[machine_name]
-	if by_name then
-		local by_index = by_name[surface_index]
-		if by_index then return by_index end
-	else
-		by_name = {}
-		_machine_metadata[machine_name] = by_name
-	end
+	if by_name then return by_name end
 
 	local recipes = {}
 	local recipes_by_product = {}
@@ -103,7 +101,8 @@ function lib.get_machine_metadata(machine_name, surface)
 	local fr = prototypes.get_recipe_filtered(filters)
 	local quality_names = get_quality_names()
 	for name, recipe in pairs(fr) do
-		if not can_craft_here(surface, recipe) then goto continue end
+		if recipe.hidden then goto continue end
+		local recipe_number = exploded_signal_to_number("recipe", name) --[[@as SignalNumber]]
 		recipes[name] = recipe
 		local main_product = recipe.main_product
 		if main_product then recipes_by_product[main_product.name] = recipe end
@@ -111,7 +110,10 @@ function lib.get_machine_metadata(machine_name, surface)
 		local ingredients = recipe.ingredients or EMPTY
 		if main_product and #ingredients > 0 then
 			local product_type = main_product.type or "item"
-			for _, quality_name in ipairs(quality_names) do
+			local iter_quality_names = (
+				recipe.can_set_quality and quality_names or JUST_NORMAL
+			) --[[@as string[] ]]
+			for _, quality_name in ipairs(iter_quality_names) do
 				local product_quality = product_type == "item" and quality_name
 					or "normal"
 				---@type SignalID
@@ -124,7 +126,7 @@ function lib.get_machine_metadata(machine_name, surface)
 					product_type,
 					main_product.name,
 					product_quality
-				)
+				) --[[@as SignalNumber]]
 
 				---@type SignalNumber[]
 				local required_keys = {}
@@ -143,13 +145,15 @@ function lib.get_machine_metadata(machine_name, surface)
 				local variant_id = #variants + 1
 				variants[variant_id] = {
 					recipe = recipe,
+					recipe_name = name,
+					recipe_number = recipe_number,
 					quality = quality_name,
 					product = product,
 					product_number = product_number,
 					required_count = #required_keys,
 					required_keys = required_keys,
 					required_amounts = required_amounts,
-					pivot_key = required_keys[1],
+					pivot_key = required_keys[1] --[[@as SignalNumber]],
 				}
 				for i = 1, #required_keys do
 					local key = required_keys[i]
@@ -220,8 +224,100 @@ function lib.get_machine_metadata(machine_name, surface)
 
 	metadata.variant_count = #variants
 
-	by_name[surface_index] = metadata
+	_machine_metadata[machine_name] = metadata
 	return metadata
+end
+
+-- XXX: MP SAFETY: Pure function of prototypes
+---@type table<integer, table<SignalNumber, boolean>>
+local _can_craft_here_cache = {}
+
+---@param surface_index integer
+---@param recipe_number SignalNumber
+---@return boolean
+function lib.can_craft_here(surface_index, recipe_number)
+	-- Cache hit
+	local cache = _can_craft_here_cache[surface_index]
+	if not cache then
+		cache = {}
+		_can_craft_here_cache[surface_index] = cache
+	end
+	local cached = cache[recipe_number]
+	if cached ~= nil then return cached end
+
+	-- Cache miss
+	local surface = game.get_surface(surface_index)
+	if not surface then return false end
+	local recipe = number_to_signal(recipe_number)
+	if not recipe then
+		error(
+			"LOGIC ERROR: signal number "
+				.. recipe_number
+				.. " does not correspond to a recipe prototype"
+		)
+		return false
+	end
+	local recipe_proto = prototypes.recipe[recipe.name]
+	if not recipe_proto then
+		error(
+			"LOGIC ERROR: signal number "
+				.. recipe_number
+				.. " does not correspond to a recipe prototype"
+		)
+		return false
+	end
+	local result = can_craft_here(surface, recipe_proto)
+	cache[recipe_number] = result
+	return result
+end
+
+--------------------------------------------------------------------------------
+-- RESEARCH
+--------------------------------------------------------------------------------
+
+events.bind(
+	defines.events.on_technology_effects_reset,
+	---@param ev EventData.on_technology_effects_reset
+	function(ev) storage.recipe_enabled[ev.force.index] = {} end
+)
+
+events.bind(
+	defines.events.on_force_reset,
+	function(ev) storage.recipe_enabled[ev.force.index] = {} end
+)
+
+events.bind(
+	defines.events.on_research_finished,
+	---@param ev EventData.on_research_finished
+	function(ev)
+		local force = ev.research.force --[[@as LuaForce]]
+		local force_index = force.index
+		storage.recipe_enabled[force_index] = {}
+	end
+)
+
+events.bind(defines.events.on_research_reversed, function(ev)
+	local force = ev.research.force --[[@as LuaForce]]
+	local force_index = force.index
+	storage.recipe_enabled[force_index] = {}
+end)
+
+function lib.is_researched(force_index, recipe_number)
+	local cache = storage.recipe_enabled[force_index]
+	if not cache then
+		cache = {}
+		storage.recipe_enabled[force_index] = cache
+	end
+	local cached = cache[recipe_number]
+	if cached ~= nil then return cached end
+
+	local force = game.forces[force_index] --[[@as LuaForce]]
+	if not force then return false end
+	local recipe = number_to_signal(recipe_number)
+	if not recipe then return false end
+	local researched = force.recipes[recipe.name].enabled
+	cache[recipe_number] = researched
+	return researched
 end
 
 return lib

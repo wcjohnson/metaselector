@@ -5,14 +5,18 @@ local signal_numbers = require("__signal-numbers__.signal-numbers") --[[@as Sign
 local things_client = require("__0-things__.client.client") --[[@as things.client]]
 local tlib = require("lib.core.table")
 local strace = require("lib.core.strace")
-local get_machine_metadata = require("control.metadata").get_machine_metadata
+local metadata_lib = require("control.metadata")
 
 local VF = ultros.VFlow
 local get_tag = things_client.tags_v1.get_tag
 local EMPTY = tlib.EMPTY
 local signals_to_counts = signal_numbers.signals_to_counts
+local number_to_signal = signal_numbers.number_to_signal
 local ipairs = ipairs
 local pairs = pairs
+local get_machine_metadata = metadata_lib.get_machine_metadata
+local can_craft_here = metadata_lib.can_craft_here
+local is_researched = metadata_lib.is_researched
 
 mode_lib.register_mode({
 	name = "ingredients-to-products",
@@ -26,9 +30,10 @@ mode_lib.register_mode({
 			local prof_0 = helpers.create_profiler()
 			local id = combinator.id
 			local inputs = (combinator.inputs or EMPTY) --[[@as Signal[] ]]
+			local surface_index = combinator.entity.surface.index
+			local force_index = combinator.entity.force.index
 			local machine_sig = get_tag(id, "machine") --[[@as string?]]
-			local metadata =
-				get_machine_metadata(machine_sig, combinator.entity.surface)
+			local metadata = get_machine_metadata(machine_sig)
 			if not metadata then
 				combinator:direct_write_outputs(EMPTY)
 				return
@@ -48,7 +53,6 @@ mode_lib.register_mode({
 			local prof_1 = helpers.create_profiler()
 			---@type SignalNumberCounts
 			local input_counts = signals_to_counts(inputs)
-			local candidate_count = 0
 
 			---@type table<SignalNumber, boolean>
 			local seen_outputs = {}
@@ -58,8 +62,14 @@ mode_lib.register_mode({
 				local variant_ids = variants_by_pivot_key[key]
 				if variant_ids then
 					for i = 1, #variant_ids do
-						candidate_count = candidate_count + 1
 						local variant = variants[variant_ids[i]] --[[@as Metaselector.RecipeVariant]]
+						local variant_recipe_number = variant.recipe_number
+						if not can_craft_here(surface_index, variant_recipe_number) then
+							goto next_variant
+						end
+						if not is_researched(force_index, variant_recipe_number) then
+							goto next_variant
+						end
 						local variant_required_keys = variant.required_keys
 						local variant_required_amounts = variant.required_amounts
 						local can_make = true
@@ -82,6 +92,7 @@ mode_lib.register_mode({
 								}
 							end
 						end
+						::next_variant::
 					end
 				end
 			end
@@ -91,8 +102,6 @@ mode_lib.register_mode({
 				"",
 				"ingredients-to-products: candidate collection took ",
 				prof_1,
-				" for hits ",
-				candidate_count,
 			})
 
 			local prof_3 = helpers.create_profiler()

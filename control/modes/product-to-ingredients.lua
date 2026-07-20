@@ -5,11 +5,16 @@ local ultros = require("lib.core.relm.ultros")
 local things_client = require("__0-things__.client.client") --[[@as things.client]]
 local tlib = require("lib.core.table")
 local strace = require("lib.core.strace")
-local get_machine_metadata = require("control.metadata").get_machine_metadata
+local metadata_lib = require("control.metadata")
+local signal_numbers = require("__signal-numbers__.signal-numbers") --[[@as SignalNumbers.Lib]]
 
 local VF = ultros.VFlow
 local get_tag = things_client.tags_v1.get_tag
 local EMPTY = tlib.EMPTY
+local get_machine_metadata = metadata_lib.get_machine_metadata
+local can_craft_here = metadata_lib.can_craft_here
+local is_researched = metadata_lib.is_researched
+local exploded_signal_to_number = signal_numbers.exploded_signal_to_number
 
 mode_lib.register_mode({
 	name = "product-to-ingredients",
@@ -22,23 +27,26 @@ mode_lib.register_mode({
 			local id = combinator.id
 			local input = (combinator.inputs or EMPTY)[1]
 			local machine_sig = get_tag(id, "machine") --[[@as string?]]
-			strace.trace(
-				"product-to-ingredients:script_update id",
-				id,
-				"input",
-				input,
-				"machine_sig",
-				machine_sig
-			)
-			local metadata =
-				get_machine_metadata(machine_sig, combinator.entity.surface)
+			local metadata = get_machine_metadata(machine_sig)
 			if not input or not metadata then
 				combinator:direct_write_outputs(EMPTY)
 				return
 			end
+			local combinator_entity = combinator.entity
+			local force = combinator_entity.force --[[@as LuaForce]]
 			local item = input.signal.name or ""
 			local recipe = metadata.recipes_by_product[item]
 			if not recipe then
+				combinator:direct_write_outputs(EMPTY)
+				return
+			end
+			local recipe_number = exploded_signal_to_number("recipe", recipe.name) --[[@as SignalNumber]]
+			local researched = is_researched(force.index, recipe_number)
+			if not researched then
+				combinator:direct_write_outputs(EMPTY)
+				return
+			end
+			if not can_craft_here(combinator_entity.surface_index, recipe_number) then
 				combinator:direct_write_outputs(EMPTY)
 				return
 			end
