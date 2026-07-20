@@ -1,7 +1,7 @@
 local mode_lib = require("control.mode")
-local siglib = require("lib.core.signal")
 local relm = require("lib.core.relm.relm")
 local ultros = require("lib.core.relm.ultros")
+local signal_numbers = require("__signal-numbers__.signal-numbers") --[[@as SignalNumbers.Lib]]
 local things_client = require("__0-things__.client.client") --[[@as things.client]]
 local tlib = require("lib.core.table")
 local strace = require("lib.core.strace")
@@ -10,8 +10,7 @@ local get_machine_metadata = require("control.metadata").get_machine_metadata
 local VF = ultros.VFlow
 local get_tag = things_client.tags_v1.get_tag
 local EMPTY = tlib.EMPTY
-local signal_to_key = siglib.signal_to_key
-local signals_to_counts = siglib.signals_to_counts
+local signals_to_counts = signal_numbers.signals_to_counts
 local ipairs = ipairs
 local pairs = pairs
 
@@ -24,6 +23,7 @@ mode_lib.register_mode({
 		---@param combinator Metaselector.Combinator
 		function(combinator)
 			local profiler = helpers.create_profiler()
+			local prof_0 = helpers.create_profiler()
 			local id = combinator.id
 			local inputs = (combinator.inputs or EMPTY) --[[@as Signal[] ]]
 			local machine_sig = get_tag(id, "machine") --[[@as string?]]
@@ -35,72 +35,79 @@ mode_lib.register_mode({
 			end
 			local variants = metadata.variants
 			local variants_by_pivot_key = metadata.variants_by_pivot_key
-
-			---@type SignalCounts
-			local input_counts = signals_to_counts(inputs)
+			prof_0.stop()
+			---@diagnostic disable-next-line: param-type-mismatch
+			log({
+				"",
+				"ingredients-to-products: metadata load took ",
+				prof_0,
+				" for variants ",
+				#variants,
+			})
 
 			local prof_1 = helpers.create_profiler()
-			---@type integer[]
-			local candidates = {}
+			---@type SignalNumberCounts
+			local input_counts = signals_to_counts(inputs)
+			local candidate_count = 0
+
+			---@type table<SignalNumber, boolean>
+			local seen_outputs = {}
+			---@type DeciderCombinatorOutput[]
+			local outputs = {}
 			for key in pairs(input_counts) do
 				local variant_ids = variants_by_pivot_key[key]
 				if variant_ids then
 					for i = 1, #variant_ids do
-						candidates[#candidates + 1] = variant_ids[i]
+						candidate_count = candidate_count + 1
+						local variant = variants[variant_ids[i]] --[[@as Metaselector.RecipeVariant]]
+						local variant_required_keys = variant.required_keys
+						local variant_required_amounts = variant.required_amounts
+						local can_make = true
+						for j = 1, variant.required_count do
+							local req_key = variant_required_keys[j]
+							if (input_counts[req_key] or 0) < variant_required_amounts[j] then
+								can_make = false
+								break
+							end
+						end
+
+						if can_make then
+							local product_number = variant.product_number
+							if not seen_outputs[product_number] then
+								seen_outputs[product_number] = true
+								outputs[#outputs + 1] = {
+									signal = variant.product,
+									copy_count_from_input = false,
+									constant = 1,
+								}
+							end
+						end
 					end
 				end
 			end
-			local candidate_count = #candidates
 			prof_1.stop()
+			---@diagnostic disable-next-line: param-type-mismatch
 			log({
 				"",
-				"ingredients-to-products: pivot candidate collection took ",
+				"ingredients-to-products: candidate collection took ",
 				prof_1,
 				" for hits ",
 				candidate_count,
 			})
 
-			local prof_2 = helpers.create_profiler()
-			---@type table<SignalKey, boolean>
-			local seen_outputs = {}
-			---@type DeciderCombinatorOutput[]
-			local outputs = {}
-			for i = 1, candidate_count do
-				local variant = variants[candidates[i]] --[[@as Metaselector.RecipeVariant]]
-				local can_make = true
-				for j = 1, variant.required_count do
-					local key = variant.required_keys[j]
-					if (input_counts[key] or 0) < variant.required_amounts[j] then
-						can_make = false
-						break
-					end
-				end
-
-				if can_make then
-					local product_key = signal_to_key(variant.product)
-					if not seen_outputs[product_key] then
-						seen_outputs[product_key] = true
-						outputs[#outputs + 1] = {
-							signal = variant.product,
-							copy_count_from_input = false,
-							constant = 1,
-						}
-					end
-				end
-			end
-			prof_2.stop()
+			local prof_3 = helpers.create_profiler()
+			combinator:direct_write_outputs(outputs)
+			prof_3.stop()
+			---@diagnostic disable-next-line: param-type-mismatch
 			log({
 				"",
-				"ingredients-to-products: output generation took ",
-				prof_2,
-				" for outputs ",
-				#outputs,
+				"ingredients-to-products: output write took ",
+				prof_3,
 			})
 
 			profiler.stop()
 			---@diagnostic disable-next-line: param-type-mismatch
 			log({ "", "ingredients-to-products took ", profiler })
-			combinator:direct_write_outputs(outputs)
 		end,
 })
 

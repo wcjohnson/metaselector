@@ -7,7 +7,7 @@
   "homepage": "https://github.com/wcjohnson/metaselector",
   "description": "A combinator that allows a variety of game metadata, including items and recipes, to be selected and output to a circuit network.",
   "factorio_version": "2.1",
-  "dependencies": [ "base >= 2.1.7", "0-things >= 0.6.0" ],
+  "dependencies": [ "base >= 2.1.7", "0-things >= 0.6.0", "signal-numbers >= 1.0.0" ],
   "package": {
     "git_publish_branch": "main",
     "ignore": [ "crowdin.yml", "stylua.toml", "tests/**", "doc/**" ],

@@ -1,10 +1,12 @@
 local tlib = require("lib.core.table")
-local siglib = require("lib.core.signal")
 local strace = require("lib.core.strace")
+
+local signal_numbers = require("__signal-numbers__.signal-numbers") --[[@as SignalNumbers.Lib]]
 
 local ipairs = ipairs
 local pairs = pairs
 local EMPTY = tlib.EMPTY
+local exploded_signal_to_number = signal_numbers.exploded_signal_to_number
 
 local lib = {}
 
@@ -24,17 +26,18 @@ end
 ---@field public recipes_by_product table<string, LuaRecipePrototype> Recipe that produces this product. "last" recipe returned by Factorio takes precedence.
 ---@field public variant_count integer
 ---@field public variants Metaselector.RecipeVariant[]
----@field public variants_by_ingredient_key table<SignalKey, integer[]>
----@field public variants_by_pivot_key table<SignalKey, integer[]>
+---@field public variants_by_ingredient_key table<SignalNumber, integer[]>
+---@field public variants_by_pivot_key table<SignalNumber, integer[]>
 
 ---@class Metaselector.RecipeVariant
 ---@field public recipe LuaRecipePrototype
 ---@field public quality string
 ---@field public product SignalID
+---@field public product_number SignalNumber
 ---@field public required_count integer
----@field public required_keys SignalKey[]
+---@field public required_keys SignalNumber[]
 ---@field public required_amounts integer[]
----@field public pivot_key SignalKey
+---@field public pivot_key SignalNumber
 
 ---@type string[]?
 local _quality_names
@@ -75,9 +78,9 @@ function lib.get_machine_metadata(machine_name, surface)
 	local recipes_by_product = {}
 	---@type Metaselector.RecipeVariant[]
 	local variants = {}
-	---@type table<SignalKey, integer[]>
+	---@type table<SignalNumber, integer[]>
 	local variants_by_ingredient_key = {}
-	---@type table<SignalKey, integer[]>
+	---@type table<SignalNumber, integer[]>
 	local variants_by_pivot_key = {}
 	---@type Metaselector.MachineMetadata
 	local metadata = {
@@ -109,22 +112,29 @@ function lib.get_machine_metadata(machine_name, surface)
 		if main_product and #ingredients > 0 then
 			local product_type = main_product.type or "item"
 			for _, quality_name in ipairs(quality_names) do
+				local product_quality = product_type == "item" and quality_name
+					or "normal"
 				---@type SignalID
 				local product = {
 					type = product_type,
 					name = main_product.name,
-					quality = product_type == "item" and quality_name or "normal",
+					quality = product_quality,
 				}
+				local product_number = exploded_signal_to_number(
+					product_type,
+					main_product.name,
+					product_quality
+				)
 
-				---@type SignalKey[]
+				---@type SignalNumber[]
 				local required_keys = {}
 				---@type integer[]
 				local required_amounts = {}
 				for _, ingredient in ipairs(ingredients) do
 					local ingredient_type = ingredient.type or "item"
-					required_keys[#required_keys + 1] = siglib.encode_signal_key(
-						ingredient.name,
+					required_keys[#required_keys + 1] = exploded_signal_to_number(
 						ingredient_type,
+						ingredient.name,
 						ingredient_type == "item" and quality_name or "normal"
 					)
 					required_amounts[#required_amounts + 1] = math.ceil(ingredient.amount)
@@ -135,6 +145,7 @@ function lib.get_machine_metadata(machine_name, surface)
 					recipe = recipe,
 					quality = quality_name,
 					product = product,
+					product_number = product_number,
 					required_count = #required_keys,
 					required_keys = required_keys,
 					required_amounts = required_amounts,
@@ -157,6 +168,37 @@ function lib.get_machine_metadata(machine_name, surface)
 	for variant_id = 1, #variants do
 		local variant = variants[variant_id]
 		local required_keys = variant.required_keys
+		local required_amounts = variant.required_amounts
+
+		-- Reorder checks to fail fast: larger required amounts first, then rarer keys.
+		for i = 1, variant.required_count - 1 do
+			local best = i
+			local best_amount = required_amounts[i]
+			local best_len = #(variants_by_ingredient_key[required_keys[i]] or EMPTY)
+			for j = i + 1, variant.required_count do
+				local amount = required_amounts[j]
+				if amount > best_amount then
+					best = j
+					best_amount = amount
+					best_len = #(variants_by_ingredient_key[required_keys[j]] or EMPTY)
+				elseif amount == best_amount then
+					local key_len = #(
+						variants_by_ingredient_key[required_keys[j]] or EMPTY
+					)
+					if key_len < best_len then
+						best = j
+						best_len = key_len
+					end
+				end
+			end
+			if best ~= i then
+				required_keys[i], required_keys[best] =
+					required_keys[best], required_keys[i]
+				required_amounts[i], required_amounts[best] =
+					required_amounts[best], required_amounts[i]
+			end
+		end
+
 		local pivot_key = required_keys[1]
 		local pivot_len = #(variants_by_ingredient_key[pivot_key] or EMPTY)
 		for i = 2, variant.required_count do
