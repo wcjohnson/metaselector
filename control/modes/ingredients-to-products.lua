@@ -30,8 +30,9 @@ mode_lib.register_mode({
 			local prof_0 = helpers.create_profiler()
 			local id = combinator.id
 			local inputs = (combinator.inputs or EMPTY) --[[@as Signal[] ]]
-			local surface_index = combinator.entity.surface.index
-			local force_index = combinator.entity.force.index
+			local combinator_entity = combinator.entity
+			local surface_index = combinator_entity.surface_index
+			local force_index = combinator_entity.force_index
 			local machine_sig = get_tag(id, "machine") --[[@as string?]]
 			local metadata = get_machine_metadata(machine_sig)
 			if not metadata then
