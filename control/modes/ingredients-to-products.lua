@@ -26,8 +26,6 @@ mode_lib.register_mode({
 	script_update =
 		---@param combinator Metaselector.Combinator
 		function(combinator)
-			local profiler = helpers.create_profiler()
-			local prof_0 = helpers.create_profiler()
 			local id = combinator.id
 			local inputs = (combinator.inputs or EMPTY) --[[@as Signal[] ]]
 			local combinator_entity = combinator.entity
@@ -41,17 +39,7 @@ mode_lib.register_mode({
 			end
 			local variants = metadata.variants
 			local variants_by_pivot_key = metadata.variants_by_pivot_key
-			prof_0.stop()
-			---@diagnostic disable-next-line: param-type-mismatch
-			log({
-				"",
-				"ingredients-to-products: metadata load took ",
-				prof_0,
-				" for variants ",
-				#variants,
-			})
 
-			local prof_1 = helpers.create_profiler()
 			---@type SignalNumberCounts
 			local input_counts = signals_to_counts(inputs)
 
@@ -97,27 +85,8 @@ mode_lib.register_mode({
 					end
 				end
 			end
-			prof_1.stop()
-			---@diagnostic disable-next-line: param-type-mismatch
-			log({
-				"",
-				"ingredients-to-products: candidate collection took ",
-				prof_1,
-			})
 
-			local prof_3 = helpers.create_profiler()
 			combinator:direct_write_outputs(outputs)
-			prof_3.stop()
-			---@diagnostic disable-next-line: param-type-mismatch
-			log({
-				"",
-				"ingredients-to-products: output write took ",
-				prof_3,
-			})
-
-			profiler.stop()
-			---@diagnostic disable-next-line: param-type-mismatch
-			log({ "", "ingredients-to-products took ", profiler })
 		end,
 })
 

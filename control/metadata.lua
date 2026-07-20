@@ -13,17 +13,6 @@ local JUST_NORMAL = { "normal" }
 
 local lib = {}
 
----@param surface LuaSurface
----@param recipe LuaRecipePrototype
-local function can_craft_here(surface, recipe)
-	if surface.ignore_surface_conditions then return true end
-	for _, sc in ipairs(recipe.surface_conditions or EMPTY) do
-		local value = surface.get_property(sc.property) or 0
-		if value < sc.min or value > sc.max then return false end
-	end
-	return true
-end
-
 ---@class Metaselector.MachineMetadata
 ---@field public recipes table<string, LuaRecipePrototype> Recipes that can be crafted on this machine on this surface
 ---@field public recipes_by_product table<string, LuaRecipePrototype> Recipe that produces this product. "last" recipe returned by Factorio takes precedence.
@@ -228,19 +217,30 @@ function lib.get_machine_metadata(machine_name)
 	return metadata
 end
 
--- XXX: MP SAFETY: Pure function of prototypes
----@type table<integer, table<SignalNumber, boolean>>
-local _can_craft_here_cache = {}
+--------------------------------------------------------------------------------
+-- SURFACE CONDITIONS
+--------------------------------------------------------------------------------
+
+---@param surface LuaSurface
+---@param recipe LuaRecipePrototype
+local function can_craft_here(surface, recipe)
+	if surface.ignore_surface_conditions then return true end
+	for _, sc in ipairs(recipe.surface_conditions or EMPTY) do
+		local value = surface.get_property(sc.property) or 0
+		if value < sc.min or value > sc.max then return false end
+	end
+	return true
+end
 
 ---@param surface_index integer
 ---@param recipe_number SignalNumber
 ---@return boolean
 function lib.can_craft_here(surface_index, recipe_number)
 	-- Cache hit
-	local cache = _can_craft_here_cache[surface_index]
+	local cache = storage.can_craft_here[surface_index]
 	if not cache then
 		cache = {}
-		_can_craft_here_cache[surface_index] = cache
+		storage.can_craft_here[surface_index] = cache
 	end
 	local cached = cache[recipe_number]
 	if cached ~= nil then return cached end
