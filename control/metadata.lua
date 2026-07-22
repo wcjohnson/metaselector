@@ -20,6 +20,12 @@ local lib = {}
 ---@field public variants Metaselector.RecipeVariant[]
 ---@field public variants_by_ingredient_key table<SignalNumber, integer[]>
 ---@field public variants_by_pivot_key table<SignalNumber, integer[]>
+---@field public requirements_by_key table<SignalNumber, Metaselector.RequirementEntry[]>
+
+---@class Metaselector.RequirementEntry
+---@field public variant_id integer
+---@field public req_index integer
+---@field public req_amount integer
 
 ---@class Metaselector.RecipeVariant
 ---@field public recipe LuaRecipePrototype
@@ -69,6 +75,8 @@ function lib.get_machine_metadata(machine_name)
 	local variants_by_ingredient_key = {}
 	---@type table<SignalNumber, integer[]>
 	local variants_by_pivot_key = {}
+	---@type table<SignalNumber, Metaselector.RequirementEntry[]>
+	local requirements_by_key = {}
 	---@type Metaselector.MachineMetadata
 	local metadata = {
 		recipes = recipes,
@@ -77,6 +85,7 @@ function lib.get_machine_metadata(machine_name)
 		variants = variants,
 		variants_by_ingredient_key = variants_by_ingredient_key,
 		variants_by_pivot_key = variants_by_pivot_key,
+		requirements_by_key = requirements_by_key,
 	}
 
 	local mproto = prototypes.entity[machine_name]
@@ -146,11 +155,28 @@ function lib.get_machine_metadata(machine_name)
 				}
 				for i = 1, #required_keys do
 					local key = required_keys[i]
+					local req_amount = required_amounts[i]
 					local recipe_ids = variants_by_ingredient_key[key]
 					if recipe_ids then
 						recipe_ids[#recipe_ids + 1] = variant_id
 					else
 						variants_by_ingredient_key[key] = { variant_id }
+					end
+					local req_entries = requirements_by_key[key]
+					if req_entries then
+						req_entries[#req_entries + 1] = {
+							variant_id = variant_id,
+							req_index = i,
+							req_amount = req_amount,
+						}
+					else
+						requirements_by_key[key] = {
+							{
+								variant_id = variant_id,
+								req_index = i,
+								req_amount = req_amount,
+							},
+						}
 					end
 				end
 			end
