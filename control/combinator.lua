@@ -11,9 +11,13 @@ local get_child = things_client.parent_child_v1.get_child
 local arm_trigger = things_client.triggers_v1.arm_trigger
 local create_circuit_change_detector =
 	things_client.triggers_v1.create_circuit_change_detector
+local create_custom_circuit_change_detector =
+	things_client.triggers_v1.create_custom_circuit_change_detector
 local destroy_circuit_change_detector =
 	things_client.triggers_v1.destroy_circuit_change_detector
 local modes = mode_lib.modes
+local handle_custom_trigger_event =
+	things_client.triggers_v1.handle_custom_trigger_event
 
 local EMPTY = tlib.EMPTY
 local I_RED = defines.wire_connector_id.combinator_input_red
@@ -167,8 +171,13 @@ function Combinator:check_detector()
 
 		local r_comb_in = entity.get_wire_connector(I_RED, true)
 		local g_comb_in = entity.get_wire_connector(I_GREEN, true)
-		local trigger_id =
-			create_circuit_change_detector(id, "", r_comb_in, g_comb_in)
+		local trigger_id = create_custom_circuit_change_detector(
+			"metaselector-circuit-trigger",
+			id,
+			"",
+			r_comb_in,
+			g_comb_in
+		)
 		self.trigger_id = trigger_id
 		strace.trace(
 			"Combinator:check_detector id",
@@ -248,18 +257,17 @@ events.bind(
 )
 
 events.bind(
-	"metaselector-on_trigger",
-
-	---@param event things.EventData.on_trigger
-	function(event)
-		strace.trace("Combinator:on_trigger", event)
-		local thing_id = event.thing_id
-		local combinator = storage.combinators[thing_id]
-		if not combinator then return end
-		-- Suppress trigger till cleaned
-		arm_trigger(event.trigger_id, false)
-		-- Mark dirty
-		combinator:set_inputs_dirty()
+	"metaselector-circuit-trigger",
+	---@param ev EventData.on_script_trigger_effect
+	function(ev)
+		local triggered, trigger_id = handle_custom_trigger_event(ev)
+		if triggered then
+			strace.trace("metaselector-circuit-trigger", triggered, trigger_id, ev)
+			local combinator = storage.combinators[triggered]
+			if not combinator then return end
+			arm_trigger(trigger_id, false)
+			combinator:set_inputs_dirty()
+		end
 	end
 )
 

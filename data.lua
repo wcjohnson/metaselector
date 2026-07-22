@@ -44,7 +44,6 @@ things.register({
 		on_tags_changed = "metaselector-on_tags_changed",
 		on_initialized = "metaselector-on_initialized",
 		on_status = "metaselector-on_status",
-		on_trigger = "metaselector-on_trigger",
 	},
 })
 
@@ -93,3 +92,16 @@ data_util.unlock_recipe_with_technology(
 	"metaselector-combinator",
 	"advanced-combinators"
 )
+
+--------------------------------------------------------------------------------
+-- Custom circuit detector
+--------------------------------------------------------------------------------
+
+local mine = things.combinators_v1.create_custom_trigger_prototype(
+	"metaselector-circuit-trigger"
+)
+mine.name = "metaselector-circuit-trigger"
+data:extend({
+	mine,
+	{ type = "custom-event", name = "metaselector-circuit-trigger" },
+})
