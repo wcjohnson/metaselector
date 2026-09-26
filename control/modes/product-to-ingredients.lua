@@ -14,7 +14,9 @@ local EMPTY = tlib.EMPTY
 local get_machine_metadata = metadata_lib.get_machine_metadata
 local can_craft_here = metadata_lib.can_craft_here
 local is_researched = metadata_lib.is_researched
-local exploded_signal_to_number = signal_numbers.exploded_signal_to_number
+local exploded_signal_to_key = signal_numbers.exploded_signal_to_key
+local ipairs = ipairs
+local ceil = math.ceil
 
 mode_lib.register_mode({
 	name = "product-to-ingredients",
@@ -40,13 +42,13 @@ mode_lib.register_mode({
 				combinator:direct_write_outputs(EMPTY)
 				return
 			end
-			local recipe_number = exploded_signal_to_number("recipe", recipe.name) --[[@as SignalNumber]]
-			local researched = is_researched(force.index, recipe_number)
+			local recipe_key = exploded_signal_to_key("recipe", recipe.name) --[[@as SignalKey]]
+			local researched = is_researched(force.index, recipe_key)
 			if not researched then
 				combinator:direct_write_outputs(EMPTY)
 				return
 			end
-			if not can_craft_here(combinator_entity.surface_index, recipe_number) then
+			if not can_craft_here(combinator_entity.surface_index, recipe_key) then
 				combinator:direct_write_outputs(EMPTY)
 				return
 			end
@@ -62,7 +64,7 @@ mode_lib.register_mode({
 						quality = ingtype == "item" and quality or "normal",
 					},
 					copy_count_from_input = false,
-					constant = math.ceil(ingredient.amount),
+					constant = ceil(ingredient.amount),
 				}
 			end
 			combinator:direct_write_outputs(ingsigs)

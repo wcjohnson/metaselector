@@ -9,7 +9,7 @@ local metadata_lib = require("control.metadata")
 local get_tag = things_client.tags_v1.get_tag
 local EMPTY = tlib.EMPTY
 local signals_to_counts = signal_numbers.signals_to_counts
-local number_to_signal = signal_numbers.number_to_signal
+local key_to_signal = signal_numbers.key_to_signal
 local pairs = pairs
 local get_machine_metadata = metadata_lib.get_machine_metadata
 local can_craft_here = metadata_lib.can_craft_here
@@ -19,8 +19,8 @@ local is_researched = metadata_lib.is_researched
 ---@field public machine_sig string
 ---@field public variant_missing table<integer, integer>
 ---@field public variant_active table<integer, boolean>
----@field public product_refcount table<SignalNumber, integer>
----@field public changed_keys SignalNumber[]
+---@field public product_refcount table<SignalKey, integer>
+---@field public changed_keys SignalKey[]
 ---@field public changed_variants integer[]
 ---@field public delta_missing table<integer, integer>
 
@@ -42,7 +42,7 @@ end
 
 ---@param state Metaselector.I2PState
 ---@param metadata Metaselector.MachineMetadata
----@param input_counts table<SignalNumber, int32>
+---@param input_counts table<SignalKey, int32>
 ---@param surface_index integer
 ---@param force_index integer
 local function init_state(
@@ -105,7 +105,7 @@ local function write_outputs_from_state(combinator, state)
 	local outputs = {}
 	for product_number, refcount in pairs(state.product_refcount) do
 		if refcount > 0 then
-			local product = number_to_signal(product_number)
+			local product = key_to_signal(product_number)
 			if product then
 				outputs[#outputs + 1] = {
 					signal = product,
@@ -142,7 +142,7 @@ mode_lib.register_mode({
 				return
 			end
 
-			---@type table<SignalNumber, int32>
+			---@type table<SignalKey, int32>
 			local input_counts = signals_to_counts(inputs)
 			local old_counts = combinator.input_counts
 			combinator.input_counts = input_counts

@@ -7,8 +7,8 @@ local signal_numbers = require("__signal-numbers__.signal-numbers") --[[@as Sign
 local ipairs = ipairs
 local pairs = pairs
 local EMPTY = tlib.EMPTY
-local exploded_signal_to_number = signal_numbers.exploded_signal_to_number
-local number_to_signal = signal_numbers.number_to_signal
+local exploded_signal_to_key = signal_numbers.exploded_signal_to_key
+local key_to_signal = signal_numbers.key_to_signal
 local JUST_NORMAL = { "normal" }
 
 local lib = {}
@@ -18,9 +18,9 @@ local lib = {}
 ---@field public recipes_by_product table<string, LuaRecipePrototype> Recipe that produces this product. "last" recipe returned by Factorio takes precedence.
 ---@field public variant_count integer
 ---@field public variants Metaselector.RecipeVariant[]
----@field public variants_by_ingredient_key table<SignalNumber, integer[]>
----@field public variants_by_pivot_key table<SignalNumber, integer[]>
----@field public requirements_by_key table<SignalNumber, Metaselector.RequirementEntry[]>
+---@field public variants_by_ingredient_key table<SignalKey, integer[]>
+---@field public variants_by_pivot_key table<SignalKey, integer[]>
+---@field public requirements_by_key table<SignalKey, Metaselector.RequirementEntry[]>
 
 ---@class Metaselector.RequirementEntry
 ---@field public variant_id integer
@@ -29,14 +29,14 @@ local lib = {}
 
 ---@class Metaselector.RecipeVariant
 ---@field public recipe LuaRecipePrototype
----@field public recipe_number SignalNumber
+---@field public recipe_number SignalKey
 ---@field public quality string
 ---@field public product SignalID
----@field public product_number SignalNumber
+---@field public product_number SignalKey
 ---@field public required_count integer
----@field public required_keys SignalNumber[]
+---@field public required_keys SignalKey[]
 ---@field public required_amounts integer[]
----@field public pivot_key SignalNumber
+---@field public pivot_key SignalKey
 
 -- XXX: MP SAFETY: Pure function of prototypes
 ---@type string[]?
@@ -71,11 +71,11 @@ function lib.get_machine_metadata(machine_name)
 	local recipes_by_product = {}
 	---@type Metaselector.RecipeVariant[]
 	local variants = {}
-	---@type table<SignalNumber, integer[]>
+	---@type table<SignalKey, integer[]>
 	local variants_by_ingredient_key = {}
-	---@type table<SignalNumber, integer[]>
+	---@type table<SignalKey, integer[]>
 	local variants_by_pivot_key = {}
-	---@type table<SignalNumber, Metaselector.RequirementEntry[]>
+	---@type table<SignalKey, Metaselector.RequirementEntry[]>
 	local requirements_by_key = {}
 	---@type Metaselector.MachineMetadata
 	local metadata = {
@@ -100,7 +100,7 @@ function lib.get_machine_metadata(machine_name)
 	local quality_names = get_quality_names()
 	for name, recipe in pairs(fr) do
 		if recipe.hidden then goto continue end
-		local recipe_number = exploded_signal_to_number("recipe", name) --[[@as SignalNumber]]
+		local recipe_number = exploded_signal_to_key("recipe", name) --[[@as SignalKey]]
 		recipes[name] = recipe
 		local main_product = recipe.main_product
 		if main_product then recipes_by_product[main_product.name] = recipe end
@@ -120,19 +120,19 @@ function lib.get_machine_metadata(machine_name)
 					name = main_product.name,
 					quality = product_quality,
 				}
-				local product_number = exploded_signal_to_number(
+				local product_number = exploded_signal_to_key(
 					product_type,
 					main_product.name,
 					product_quality
-				) --[[@as SignalNumber]]
+				) --[[@as SignalKey]]
 
-				---@type SignalNumber[]
+				---@type SignalKey[]
 				local required_keys = {}
 				---@type integer[]
 				local required_amounts = {}
 				for _, ingredient in ipairs(ingredients) do
 					local ingredient_type = ingredient.type or "item"
-					required_keys[#required_keys + 1] = exploded_signal_to_number(
+					required_keys[#required_keys + 1] = exploded_signal_to_key(
 						ingredient_type,
 						ingredient.name,
 						ingredient_type == "item" and quality_name or "normal"
@@ -151,11 +151,17 @@ function lib.get_machine_metadata(machine_name)
 					required_count = #required_keys,
 					required_keys = required_keys,
 					required_amounts = required_amounts,
-					pivot_key = required_keys[1] --[[@as SignalNumber]],
+					pivot_key = required_keys[1] --[[@as SignalKey]],
 				}
 				for i = 1, #required_keys do
 					local key = required_keys[i]
-					local req_amount = required_amounts[i]
+					local req_amount = required_amounts[i] --[[@as integer]]
+					---@type Metaselector.RequirementEntry
+					local entry = {
+						variant_id = variant_id,
+						req_index = i,
+						req_amount = req_amount,
+					}
 					local recipe_ids = variants_by_ingredient_key[key]
 					if recipe_ids then
 						recipe_ids[#recipe_ids + 1] = variant_id
@@ -164,18 +170,10 @@ function lib.get_machine_metadata(machine_name)
 					end
 					local req_entries = requirements_by_key[key]
 					if req_entries then
-						req_entries[#req_entries + 1] = {
-							variant_id = variant_id,
-							req_index = i,
-							req_amount = req_amount,
-						}
+						req_entries[#req_entries + 1] = entry
 					else
 						requirements_by_key[key] = {
-							{
-								variant_id = variant_id,
-								req_index = i,
-								req_amount = req_amount,
-							},
+							entry,
 						}
 					end
 				end
@@ -259,26 +257,26 @@ local function can_craft_here(surface, recipe)
 end
 
 ---@param surface_index integer
----@param recipe_number SignalNumber
+---@param recipe_key SignalKey
 ---@return boolean
-function lib.can_craft_here(surface_index, recipe_number)
+function lib.can_craft_here(surface_index, recipe_key)
 	-- Cache hit
 	local cache = storage.can_craft_here[surface_index]
 	if not cache then
 		cache = {}
 		storage.can_craft_here[surface_index] = cache
 	end
-	local cached = cache[recipe_number]
+	local cached = cache[recipe_key]
 	if cached ~= nil then return cached end
 
 	-- Cache miss
 	local surface = game.get_surface(surface_index)
 	if not surface then return false end
-	local recipe = number_to_signal(recipe_number)
+	local recipe = key_to_signal(recipe_key)
 	if not recipe then
 		error(
 			"LOGIC ERROR: signal number "
-				.. recipe_number
+				.. recipe_key
 				.. " does not correspond to a recipe prototype"
 		)
 		return false
@@ -287,13 +285,13 @@ function lib.can_craft_here(surface_index, recipe_number)
 	if not recipe_proto then
 		error(
 			"LOGIC ERROR: signal number "
-				.. recipe_number
+				.. recipe_key
 				.. " does not correspond to a recipe prototype"
 		)
 		return false
 	end
 	local result = can_craft_here(surface, recipe_proto)
-	cache[recipe_number] = result
+	cache[recipe_key] = result
 	return result
 end
 
@@ -339,7 +337,7 @@ function lib.is_researched(force_index, recipe_number)
 
 	local force = game.forces[force_index] --[[@as LuaForce]]
 	if not force then return false end
-	local recipe = number_to_signal(recipe_number)
+	local recipe = key_to_signal(recipe_number)
 	if not recipe then return false end
 	local researched = force.recipes[recipe.name].enabled
 	cache[recipe_number] = researched

@@ -2,8 +2,8 @@ local events = require("lib.core.event")
 
 ---@class Metaselector.Storage
 ---@field public combinators table<things.Id, Metaselector.Combinator>
----@field public recipe_enabled table<int, table<SignalNumber, boolean>>
----@field public can_craft_here table<int, table<SignalNumber, boolean>>
+---@field public recipe_enabled table<int, table<SignalKey, boolean>>
+---@field public can_craft_here table<int, table<SignalKey, boolean>>
 storage = {}
 
 ---@param k any

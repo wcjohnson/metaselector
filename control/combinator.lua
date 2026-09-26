@@ -53,7 +53,7 @@ local lib = {}
 ---@field public trigger_id? things.Id Things trigger ID if a trigger is associated with this combinator
 ---@field public dirty? true If `true`, the combinator's inputs need to be re-read.
 ---@field public inputs? Signal[] The cached input signals of this combinator, if any
----@field public input_counts? table<SignalNumber, int32> The cached input signal counts of this combinator, if any
+---@field public input_counts? table<SignalKey, int32> The cached input signal counts of this combinator, if any
 ---@field public outputs_dirty? true If `true`, the combinator's outputs need to be re-written.
 ---@field public last_read_tick? int64 The last tick at which the inputs were read
 ---@field public modal_data? Any Mode-specific data for this combinator, if any
